@@ -292,7 +292,7 @@ public:
     }*/
     void reset(){//stworzenie X obiektow i wlozenie ich do wektora
         Creature c;
-        for(int i = 0; i < 1500; i++)
+        for(int i = 0; i < 70; i++)
         {
             c.reset();
             creatureVector.push_back(c);
@@ -653,7 +653,15 @@ int main()
                 window.setView(view);
 
 ///OBSLUGA MROWEK
+                int LLL = 0;
                 for(auto &creature: *world.creaturePointer()){//comment from forum: You need to reference the vector's object with a pointer, otherwise you're just modifying a local copy. -> for (auto &i : vec) {...}
+                    if(LLL == 0) creature.move(
+                                               keyFlag.w(),
+                                               keyFlag.s(),
+                                               keyFlag.a(),
+                                               keyFlag.d()
+                                               );
+                    else
                     creature.move(
                                   rand() % 4,
                                   rand() % 2,
@@ -661,6 +669,7 @@ int main()
                                   rand() % 2
                                   );
                     creature.updateShape();
+                    LLL++;
                 }
 
 
