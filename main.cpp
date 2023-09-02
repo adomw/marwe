@@ -149,32 +149,27 @@ public:
 class Creature{//Klasa zyjacego stworzonka
 private:
     float X, Y;//obecne wspolrzedne
+    float PlusX, PlusY;//to, ile zostanie dodane w tej turze, deltaX deltaY jakby
     float Angle;//kat wektora ruchu, 0 = "12" na zegarze, zgodnie z ruchem wskazowek zegara
     float V;//obecna predkosc
-    const float Vmax = 1.0;
+    const float Vmax = 1.0;//maksymalna predkosc
     int LastDrop;//liczba "tur", klatek symulacji, od ostatnio dropnietego sygnalu
     int Energy;//energia, uzupelniana jedzeniem i zmniejszana ruchem
     const float M = 2.0;//masa stworzenia, potrzebna by wyliczyc ped (fonetycznie "pend"); pozniej byc moze bedzie zmienna
     sf::CircleShape shape;//pozniej to zrobie na wskaznikach lepiej... na razie trzymam sie obecnej koncepcji, zeby cos pociagnac do konca
 public:
-
-    void updateParameters(float x, float y){//setter zmiennych obiektu, z zewnatrz
-        X = x;
-        Y = y;
-    }
     void updateShape(){//aktualizacja zmiennej graficznej SFML na podstawie parametrow tego obiektu
-        shape.setRadius(sqrt(M));
+        shape.setRadius(M / 2);
         shape.setOutlineColor(sf::Color::Blue);
-        shape.setOutlineThickness(1.25);
+        shape.setOutlineThickness(1.2);
         shape.setPosition(X, Y);
     }
-
     void move(bool w, bool s, bool a, bool d){//dokonanie akcji na podstawie wcisnietych klawiszy: wsad oczywiste, inne - podniesienie itema, opuszczenie itema, zostawianie markerow
         //if(w) <==> "jezeli w jest wcisniete", to...
 
         ///najpierw dokonaj ruchu na bazie zmiennych z poprzedniej tury
-        X += sin(Angle) * V;
-        Y -= cos(Angle) * V;// Y jest z minusem, bo tutaj kat 0 to godizna "12" na zegarze, zas SFML liczy 0,0 od lewego gornego rogu (czyli w dol, nie do gory)
+        X += sin(Angle * M_PI / 180) * V;
+        Y -= cos(Angle * M_PI / 180) * V;// Y jest z minusem, bo tutaj kat 0 to godizna "12" na zegarze, zas SFML liczy 0,0 od lewego gornego rogu (czyli w dol, nie do gory)
 
         ///W i S
         if(!(w || s)){//jezeli W ani S nie jest wcisniete, to powoli zmniejsz predkosc, ostatecznie do 0
@@ -199,11 +194,11 @@ public:
         ///A i D
         if(a != d){//lewo i prawo
             if(a){
-                Angle -= 1.7;
+                Angle -= 1.9;
                 if(Angle < 0) Angle += 360;
             }
             else{
-                Angle += 1.7;
+                Angle += 1.9;
                 if(Angle > 360) Angle -= 360;
             }
         }
@@ -219,8 +214,9 @@ public:
     }
 
     void reset(){//reset
-        X = rand() % 500 + 100;
-        Y = rand() % 400 + 100;;
+        for(int s = 0; s < 2137; s++) rand();//run pustych randomow zeby polepszyc losowosc
+        while(rand() % 4) while(rand() % 6) X = rand() % 512 + 256;
+        while(rand() % 4) while(rand() % 6) Y = rand() % 384 + 192;
         Angle = rand() % 3600;
         Angle *= 0.1;
         V = 0.0;
@@ -228,13 +224,17 @@ public:
         Energy = 10000;
         updateShape();
     }
+    void turnYellow(){
+        shape.setFillColor(sf::Color::Red);
+        shape.setOutlineColor(sf::Color::Yellow);
+    }
 
 };
 class Food{//Klasa jedzonka
 private:
     float X, Y;//wspolrzedne
     int Remaining;//ile zarcia pozostalo w tym obiekcie
-    float R;//promien jedzonka, zmienny w zaleznosci od tego ile pozostalo
+    float R;//promien jedzonka, zmienny w zaleznosci od tego ile pozostalo - jest wazne zeby byl zmienna, po to aby mierzyc czy jest w zasiegu
     sf::CircleShape shape;//pozniej to zrobie na wskaznikach lepiej... na razie trzymam sie obecnej koncepcji, zeby cos pociagnac do konca
 public:
     void updateShape(){
@@ -308,18 +308,41 @@ class Zoom{//Klasa odpowiadajaca za zoom
 private:
     int CurrentZoom; //aktualny poziom przyblizenia, zaczyna sie od 1
     int MaxZoom = 7; //maksymalny poziom przyblizenia
-    float ZoomBase = 1.5; //proporcja miedzy kolejnymi poziomami przyblizenia
+    float ZoomBase = 1.6; //proporcja miedzy kolejnymi poziomami przyblizenia
+    sf::View View;
+    int Width;
+    int Height;
 public:
-    void reset(){CurrentZoom = 1;}
-    int currentZoom(){return CurrentZoom;}
-    void zoomIn(){if(CurrentZoom < MaxZoom) CurrentZoom++;printf("AktualnyZoom: %d\n", CurrentZoom);}
-    void zoomOut(){if(CurrentZoom > 1) CurrentZoom--;printf("AktualnyZoom: %d\n", CurrentZoom);}
-    bool isMax(){if(CurrentZoom == MaxZoom) return true; else return false;}
-    bool isMin(){if(CurrentZoom == 1) return true; else return false;}
-    float skaluj(float x){
-        float f = x * 1.0f;
-        for(int i = 1; i < CurrentZoom; i++) f /= ZoomBase;
-        return f;
+    void reset(int w, int h){
+        CurrentZoom = 1;
+        Width = w;
+        Height = h;
+        updateView(w / 2, h / 2);
+    }
+    int currentZoom(){
+        return CurrentZoom;
+    }
+    void updateView(float centerX, float centerY){
+        //view.reset(sf::FloatRect(200.f, 200.f, 300.f, 200.f));
+        View.setCenter(sf::Vector2f(
+                                    Width * powf(ZoomBase, 1 - CurrentZoom) * 0.5,
+                                    Height * powf(ZoomBase, 1 - CurrentZoom) * 0.5
+                                    ));
+        View.setSize(sf::Vector2f(
+                                  Width * powf(ZoomBase, 1 - CurrentZoom),
+                                  Height * powf(ZoomBase, 1 - CurrentZoom)
+                                  ));
+    }
+    void zoomIn(float centerX, float centerY){
+        if(CurrentZoom < MaxZoom) CurrentZoom++;
+        updateView(centerX, centerY);
+    }
+    void zoomOut(float centerX, float centerY){
+        if(CurrentZoom > 1) CurrentZoom--;
+        updateView(centerX, centerY);
+    }
+    sf::View* view(){
+        return &View;
     }
 };
 
@@ -343,11 +366,8 @@ int main()
     windowSettings.antialiasingLevel = 8;
     sf::RenderWindow window(sf::VideoMode(CURR_WIDTH, CURR_HEIGHT), "Marwë 0.2", sf::Style::Default, windowSettings);
 
-
-    sf::View view(sf::FloatRect(0.f, 0.f, CURR_WIDTH, CURR_HEIGHT));
-
     Zoom zoom;//moja klasa odpowiadajaca za zoom
-    zoom.reset();
+    zoom.reset(CURR_WIDTH, CURR_HEIGHT);
 
     while (window.isOpen())
     {
@@ -463,17 +483,13 @@ int main()
             if (event.type == sf::Event::MouseWheelMoved)
             {
                 if(event.mouseWheel.delta == 1)
-                    //view.move(10.f, 10.f);
                     keyFlag.setScrollUp(true);
-
                 else
                     keyFlag.setScrollDown(true);
-                    //view.move(-10.f, -10.f);
-                    //view.zoom(1.05f);
 
-                std::cout << "wheel movement: " << event.mouseWheel.delta << std::endl;
+                /*std::cout << "wheel movement: " << event.mouseWheel.delta << std::endl;
                 std::cout << "mouse x: " << event.mouseWheel.x << std::endl;
-                std::cout << "mouse y: " << event.mouseWheel.y << std::endl;
+                std::cout << "mouse y: " << event.mouseWheel.y << std::endl;*/
             }
             if (event.type == sf::Event::MouseButtonPressed)
             {
@@ -617,63 +633,43 @@ int main()
             zegar.restart();//reset zegara
             window.clear();//czyszczenie okna
 
-                view.setCenter(sf::Vector2f(350.f, 300.f));//to jest view, klasa ulatwiajaca rzeczy takie jak zoomowanie i przesuwanie ekranu, ale na razie tylko istnieje zeby istniec
-
-
-
                 if(keyFlag.scrollDown() == true){
-                    if(!zoom.isMin())
-                        view.zoom(powf(0.8f, zoom.currentZoom()));
-                    zoom.zoomOut();
+                    zoom.zoomOut(CURR_WIDTH / 2, CURR_HEIGHT / 2);
                     keyFlag.setScrollUp(false);
                     keyFlag.setScrollDown(false);
                 }
                 if(keyFlag.scrollUp() == true){
-                    if(!zoom.isMax())
-                        view.zoom(powf(1.25f, zoom.currentZoom()));
-                    zoom.zoomIn();
+                    zoom.zoomIn(CURR_WIDTH / 2, CURR_HEIGHT / 2);
                     keyFlag.setScrollUp(false);
                     keyFlag.setScrollDown(false);
                 }
 
+                sf::Mouse::getPosition(window);
 
-
-
-/*
-                sf::View view1;
-                view1.reset(sf::FloatRect(200.f, 200.f, 300.f, 200.f));
-
-                sf::View view2;
-                view2.setCenter(sf::Vector2f(350.f, 300.f));
-                view2.setSize(sf::Vector2f(200.f, 200.f));
-*/
-
-
-
-                window.setView(view);
+                window.setView(*zoom.view());
 
 ///OBSLUGA MROWEK
                 int LLL = 0;
                 for(auto &creature: *world.creaturePointer()){//comment from forum: You need to reference the vector's object with a pointer, otherwise you're just modifying a local copy. -> for (auto &i : vec) {...}
-                    if(LLL == 0) creature.move(
+                    if(LLL == 0) {
+                                creature.move(
                                                keyFlag.w(),
                                                keyFlag.s(),
                                                keyFlag.a(),
                                                keyFlag.d()
                                                );
+                                }
                     else
                     creature.move(
-                                  rand() % 4,
-                                  rand() % 2,
-                                  rand() % 2,
-                                  rand() % 2
+                                  !(bool)(rand() % 4),
+                                  !(bool)(rand() % 3),
+                                  !(bool)(rand() % 2),
+                                  !(bool)(rand() % 2)
                                   );
                     creature.updateShape();
+                    if(LLL == 0) creature.turnYellow();
                     LLL++;
                 }
-
-
-
 
 ///RYSOWANIE OBIEKTOW W OKNIE
                 //rysowanie creatures
@@ -683,10 +679,8 @@ int main()
                                     );
                 }
 
-
 ///WYSWIETLENIE ZAWARTOSCI OKNA
                 window.display();
-
 
         }
         //koniec if(czas >16ms)
@@ -694,19 +688,16 @@ int main()
     }
     //koniec while(window is open)
 
-
     return 0;
 
 }
+///KONIEC KODU
+
+
+//comment from forum: You need to reference the vector's object with a pointer, otherwise you're just modifying a local copy. -> for (auto &i : vec) {...}
 
     //rozdzielczosc ekranu
     //printf("%dx%d\n", sf::VideoMode::getDesktopMode().width, sf::VideoMode::getDesktopMode().height);
-
-
-//przeciez moze istniec objekt circle w obiekcie stworzonki, a w klasie world bedzie setter w postaci procedury ktora bedzie rysowac to badziewie... chyba?
-//^ na dole musi byc funkcja zwracajaca wskaznik na obiekt, a u gory musi byc guwienko ktore korzystajac z tego wskaznika, kaze sie zachowac obiektowi, na ktory ten wskaznik wskazuje
-
-//^^wsiaznik bedzie do rysowania obiektu, a samo ustawianie typu wsporzedne mozna robic zwyklym getterem setterem
 
 
     /*sf::Font font;
@@ -724,18 +715,6 @@ int main()
     shape.setPointCount(200);*/
 
 
-                /*if(event.mouseWheel.delta == 1){}
-                else {}*/
-
-
-                      /*          if(event.mouseWheel.delta == 1)
-                    //view.move(10.f, 10.f);
-                    view.zoom(0.95f);
-
-                else
-                    //view.move(-10.f, -10.f);
-                    view.zoom(1.05f);
-                    */
 
 
 
