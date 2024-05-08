@@ -1,4 +1,5 @@
 #include"vector2d.h"
+#include"sensor_data.h"
 //#include"support_lib.h"
 #include<stdio.h>
 
@@ -36,7 +37,9 @@ private:
     vector2d Forces;
     vector2d Direction;
     double Mass;
-    int Stance;
+    bool W, S, A, D;
+    int Stance;//1- looking for food, 2- looking for home
+    DataSet Sensors;
 public:
     vector2d currentSpeed();
     void adjustSpeed(bool w, bool s, bool a, bool d);
@@ -44,6 +47,8 @@ public:
     vector2d forces();
     void clearForces();
     void addForce(vector2d f);
+
+    vector2d direction();
     void setDirection(double x, double y);
     void setDirection(double a);
     void updateDirection();
@@ -57,12 +62,31 @@ public:
 
     double mass();
     int stance();
+    void setStance(int s);
     void resetCreature(int key);
+
+    void calculateMovement();
+
+    bool w();
+    bool s();
+    bool a();
+    bool d();
+    void assignSensorValues(
+                            float LF, float MF, float RF,
+                            float LH, float MH, float RH,
+                            float LO, float MO, float RO
+                            );
 };
 
 class Resource : public Entity{
 private:
     int Type;// 1 - food, 2 - building material
+    int Size;
+public:
+    int size();
+    void setSize(int s);
+    void decrease();
+    void resetResource(float x, float y, int S);
 };
 class Obstacle : public Entity{
 private:

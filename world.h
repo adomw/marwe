@@ -13,7 +13,9 @@ private:
     std::set<int> creaturesInArea[POINTER_ARRAY_EDGE_X][POINTER_ARRAY_EDGE_Y];//KEYS!
     std::set<Pair> nonEmptyAreas;
     std::set<Obstacle> obstacles;
-    float marker[POINTER_ARRAY_EDGE_X][POINTER_ARRAY_EDGE_Y];
+    float FoodMarker[POINTER_ARRAY_EDGE_X][POINTER_ARRAY_EDGE_Y];
+    float HomeMarker[POINTER_ARRAY_EDGE_X][POINTER_ARRAY_EDGE_Y];
+    std::vector<Resource> resources;
 public:
     void create();
     void print();
@@ -21,9 +23,19 @@ public:
     void updatePointers(int key);
     void process(bool w, bool s, bool a, bool d);
     std::vector<Creature> toCreatures();
+    std::vector<Resource> toResources();
     std::set<Pair> toAreas();
     std::set<Obstacle> toObstacles();
     void addObstacle(double x1, double y1, double x2, double y2, double radius, int key);
+    void addResource(float x, float y, float s);
     void allocateMemory();
-    float toMarkers(int x, int y);
+
+    void updateMarkers();
+    void adjustStances();
+    void updateSensors();
+
+    float toHomeMarker(int x, int y);
+    float toFoodMarker(int x, int y);
+    void addToFoodMarker(int x, int y, float f);
+    void addToHomeMarker(int x, int y, float f);
 };

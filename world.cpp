@@ -2,8 +2,18 @@
 //#include<cstdio>
 
 
-float World::toMarkers(int x, int y){
-    return marker[x][y];
+void World::addToFoodMarker(int x, int y, float f){
+    FoodMarker[x][y] += f;
+}
+void World::addToHomeMarker(int x, int y, float f){
+    HomeMarker[x][y] += f;
+}
+
+float World::toFoodMarker(int x, int y){
+    return FoodMarker[x][y];
+}
+float World::toHomeMarker(int x, int y){
+    return HomeMarker[x][y];
 }
 
 void World::create(){
@@ -30,8 +40,10 @@ void World::create(){
     }
 
     for(int i = 0; i < POINTER_ARRAY_EDGE_X; i++)
-        for(int j = 0; j < POINTER_ARRAY_EDGE_Y; j++)
-            marker[i][j] = 0.0;
+        for(int j = 0; j < POINTER_ARRAY_EDGE_Y; j++){
+            HomeMarker[i][j] = 0.0;
+            FoodMarker[i][j] = 0.0;
+        }
 
 }
 void World::print(){
@@ -43,7 +55,7 @@ void World::print(){
         printf("Creatures in this area: %d\n", creaturesInArea[c.x][c.y].size());
     }
 }
-void World::assignPointers(){//przypisanie obiektow do poszczegolnych kratek
+void World::assignPointers(){//assigning objects to their proper squares
     Pair p;
     //clear all the creaturesInArea pointer vectors
     nonEmptyAreas.clear();
@@ -192,7 +204,7 @@ void World::process(bool w, bool s, bool a, bool d){
                         auxV = auxV * (creatures[i].radius() + creatures[j].radius() - auxV.length());
                         auxV = auxV * OBSTACLE_MASS;//obstacles should have larger mass than objects
 
-                        creatures[j].addForce(auxV * (-1 / 6.0));//so that they don't bounce off too strongly
+                        creatures[j].addForce(auxV * (-1 / 10.0));//so that they don't bounce off each other too strongly
 
 
                     }//if(creatures[i].key() == 0) printf("ASSERT LOL\n");
@@ -240,7 +252,7 @@ void World::process(bool w, bool s, bool a, bool d){
                 auxV = auxV * (creatures[i].radius() + o.radius() - dist);
                 auxV = auxV * OBSTACLE_MASS;//obstacles must have larger mass than objects
 
-                creatures[i].addForce(auxV);
+                creatures[i].addForce(auxV * OBSTACLE_FORCE_MODIFIER);
             }
             else{//if NOT in rectangle
                 dist = distance(xa, ya, x1, y1);
@@ -252,7 +264,7 @@ void World::process(bool w, bool s, bool a, bool d){
                     auxV = auxV * (creatures[i].radius() + o.radius() - dist);
                     auxV = auxV * OBSTACLE_MASS;//obstacles must have larger mass than objects
 
-                    creatures[i].addForce(auxV);
+                    creatures[i].addForce(auxV * OBSTACLE_FORCE_MODIFIER);
                 }
                 else{//not in circle1
                     dist = distance(xa, ya, x2, y2);
@@ -263,7 +275,7 @@ void World::process(bool w, bool s, bool a, bool d){
                         auxV = auxV * (creatures[i].radius() + o.radius() - dist);
                         auxV = auxV * OBSTACLE_MASS;//obstacles must have larger mass than objects
 
-                        creatures[i].addForce(auxV);
+                        creatures[i].addForce(auxV * OBSTACLE_FORCE_MODIFIER);
                     }
                 }//if NOT in circle1
             }//if NOT in rectangle
@@ -287,6 +299,24 @@ void World::process(bool w, bool s, bool a, bool d){
         creatures[i].limitSpeed();
     }
 
+    for(int i = 0; i < Size; i++){
+        if(creatures[i].stance() == 1)
+            HomeMarker
+            [creatures[i].newAreaX()]
+            [creatures[i].newAreaY()]
+            += 1.0;
+        else if(creatures[i].stance() == 2)
+            FoodMarker
+            [creatures[i].newAreaX()]
+            [creatures[i].newAreaY()]
+            += 1.0;
+    }
+
+    //apply movement algorithm
+    for(int i = 0; i < Size; i++){
+        creatures[i].calculateMovement();
+    }
+
     //steer, for the next turn
     for(int i = 0; i < Size; i++){
     //for(auto &creature : creatures){
@@ -306,10 +336,14 @@ void World::process(bool w, bool s, bool a, bool d){
         }
         else
             creatures[i].adjustSpeed(
-                                     (bool)random(8),
+                                     creatures[i].w(),
+                                     creatures[i].s(),
+                                     creatures[i].a(),
+                                     creatures[i].d()
+                                     /*(bool)random(8),
                                      (bool)random(2),
                                      (bool)random(2),
-                                     (bool)random(2)
+                                     (bool)random(2)*/
                                      //0,0,0,0
                                      );
         ///printf("------------\n");
@@ -332,14 +366,143 @@ void World::allocateMemory(){
     //for(int i = 0; i < 100; i++) for(int j = 0; j < 100; j++) creaturesInArea[i][j].reserve(20);
 }
 
+void World::updateMarkers(){//markers degrade over time
+    for(int i = 0; i < POINTER_ARRAY_EDGE_X; i++)
+        for(int j = 0; j < POINTER_ARRAY_EDGE_Y; j++){
+            HomeMarker[i][j] = HomeMarker[i][j] - (HomeMarker[i][j] / 2000.0) - 0.001;
+            if(HomeMarker[i][j] < 0) HomeMarker[i][j] = 0;
+            FoodMarker[i][j] = FoodMarker[i][j] - (FoodMarker[i][j] / 2000.0) - 0.001;
+            if(FoodMarker[i][j] < 0) FoodMarker[i][j] = 0;
+        }
+}
+
+void World::updateSensors(){//for each creature, detect sensor values and pass them to the creature itself for further treatment
+    for(int i = 0; i < creatures.size(); i++){
+            //float LH = 0, MH = 0, RH = 0, LF = 0, MF = 0, RF = 0, LO = 0, MO = 0, RO = 0;
+            float LH, MH, RH, LF, MF, RF, LO, MO, RO;
+            vector2d p1, p2;
+            int x1, x2, y1, y2;
+
+            //if(i == USER_KEY) printf("Creature Coords: (%.2f, %.2f)\n", creatures[i].x(), creatures[i].y());
+
+            //mid
+            p1 = creatures[i].coordinates() + (creatures[i].direction() * 1.5 * creatures[i].radius());
+            p2 = creatures[i].coordinates() + (creatures[i].direction() * 2.5 * creatures[i].radius());
+            x1 = p1.x() / sizeOfArea; y1 = p1.y() / sizeOfArea;
+            x2 = p2.x() / sizeOfArea; y2 = p2.y() / sizeOfArea;
+            //if(i == USER_KEY) printf("Middle : (%.2f, %.2f), (%.2f, %.2f)\n", p1.x(), p1.y(), p2.x(), p2.y());
+            MF = FoodMarker[x1][y1] + FoodMarker[x2][y2];
+            MH = HomeMarker[x1][y1] + HomeMarker[x2][y2];
+            MO = 0;
+
+            //left
+            p1 = creatures[i].coordinates() + (creatures[i].direction() * 1.5 * creatures[i].radius() * angle(-60));
+            p2 = creatures[i].coordinates() + (creatures[i].direction() * 2.5 * creatures[i].radius() * angle(-60));
+            x1 = p1.x() / sizeOfArea; y1 = p1.y() / sizeOfArea;
+            x2 = p2.x() / sizeOfArea; y2 = p2.y() / sizeOfArea;
+            //if(i == USER_KEY) printf("Left   : (%.2f, %.2f), (%.2f, %.2f)\n", p1.x(), p1.y(), p2.x(), p2.y());
+            MF = FoodMarker[x1][y1] + FoodMarker[x2][y2];
+            MH = HomeMarker[x1][y1] + HomeMarker[x2][y2];
+            MO = 0;
+
+            //right
+            p1 = creatures[i].coordinates() + (creatures[i].direction() * 1.5 * creatures[i].radius() * angle(60));
+            p2 = creatures[i].coordinates() + (creatures[i].direction() * 2.5 * creatures[i].radius() * angle(60));
+            x1 = p1.x() / sizeOfArea; y1 = p1.y() / sizeOfArea;
+            x2 = p2.x() / sizeOfArea; y2 = p2.y() / sizeOfArea;
+            //if(i == USER_KEY) printf("Right  : (%.2f, %.2f), (%.2f, %.2f)\n", p1.x(), p1.y(), p2.x(), p2.y());
+            MF = FoodMarker[x1][y1] + FoodMarker[x2][y2];
+            MH = HomeMarker[x1][y1] + HomeMarker[x2][y2];
+            MO = 0;
+
+            creatures[i].assignSensorValues(LF, MF, RF, LH, MH, RH, LO, MO, RO);
+
+            //system("pause");
+
+
+            //MH +=
+
+        }
+}
+
 std::vector<Creature> World::toCreatures(){
     return creatures;
+}
+std::vector<Resource> World::toResources(){
+    return resources;
 }
 std::set<Pair> World::toAreas(){
     return nonEmptyAreas;
 }
 std::set<Obstacle> World::toObstacles(){
     return obstacles;
+}
+
+/*void World::adjustStances(){
+    for(int i = 0; i < creatures.size(); i++)
+        for(int j = 0; j < resources.size(); j++){
+            if(creatures[i].stance() == 1)
+                //if(touching)
+                if(
+                   (sqrt(resources[j].size()) + creatures[i].radius())
+                   >=
+                   sqrt(
+                        ((resources[j].x() - creatures[i].x()) * (resources[j].x() - creatures[i].x())) +
+                        ((resources[j].y() - creatures[i].y()) * (resources[j].y() - creatures[i].y()))
+                        )
+                   ){
+                        creatures[i].setStance(2);
+                        resources[j].decrease();
+                        break;
+                   };
+            else if(creatures[i].stance() == 2)//this "else" is referring to the "if stance == 1", not "if touching"
+                if(
+                   (MAIN_BASE_RADIUS + creatures[i].radius())
+                   >=
+                   sqrt(
+                        ((MAIN_BASE_X - creatures[i].x()) * (MAIN_BASE_X - creatures[i].x())) +
+                        ((MAIN_BASE_Y - creatures[i].y()) * (MAIN_BASE_Y - creatures[i].y()))
+                        )
+                   ){
+                        creatures[i].setStance(1);
+                        //resources[j].decrease();
+                        break;
+                   };
+        }
+}*/
+
+void World::adjustStances(){//if creatures reaches food or base, the stance changes
+    for(int i = 0; i < creatures.size(); i++)
+    {
+        if(creatures[i].stance() == 1){
+            for(int j = 0; j < resources.size(); j++)
+                //if(touching)
+                if(
+                   (sqrt(resources[j].size()) + creatures[i].radius())
+                   >=
+                   sqrt(
+                        ((resources[j].x() - creatures[i].x()) * (resources[j].x() - creatures[i].x())) +
+                        ((resources[j].y() - creatures[i].y()) * (resources[j].y() - creatures[i].y()))
+                        )
+                   ){
+                        creatures[i].setStance(2);
+                        resources[j].decrease();
+                        break;
+                   }
+        }
+
+        else if(creatures[i].stance() == 2)//this "else" is referring to the "if stance == 1", not "if touching"
+            if(
+               (MAIN_BASE_RADIUS + creatures[i].radius())
+               >=
+               sqrt(
+                    ((MAIN_BASE_X - creatures[i].x()) * (MAIN_BASE_X - creatures[i].x())) +
+                    ((MAIN_BASE_Y - creatures[i].y()) * (MAIN_BASE_Y - creatures[i].y()))
+                    )
+               ){
+                    creatures[i].setStance(1);
+               }
+    }
 }
 
 void World::addObstacle(double x1, double y1, double x2, double y2, double radius, int key){
@@ -349,4 +512,10 @@ void World::addObstacle(double x1, double y1, double x2, double y2, double radiu
     o.setCoordinates(x1, y1, x2, y2);
     o.fixEnds();
     obstacles.insert(o);
+}
+
+void World::addResource(float x, float y, float s){
+    Resource r;
+    r.resetResource(x, y, s);
+    resources.push_back(r);
 }

@@ -105,6 +105,7 @@ void Creature::resetCreature(int key){
     Mass = MASS;
     CurrentSpeed.reset();
     setAreaCoordinates(newAreaX(), newAreaY());
+    setStance(1);
 
     vector2d dir;
     dir.setValue(1, 0);
@@ -126,6 +127,9 @@ int Creature::stance(){
 
 void Creature::clearForces(){
     Forces.reset();
+}
+vector2d Creature::direction(){
+    return Direction;
 }
 void Creature::addMomentum(){
     Forces = Forces + momentum();
@@ -151,7 +155,7 @@ void Creature::setDirection(double a){
     Direction.setValue(1, 0);
     Direction = Direction * angle(a);
 }
-void Creature::adjustSpeed(bool w, bool s, bool a, bool d){
+void Creature::adjustSpeed(bool w, bool s, bool a, bool d){//adjust speed and direction based on buttons pressed
         ///W i S
         if(!(w || s))//jezeli W ani S nie jest wcisniete, to powoli zmniejsz predkosc, ostatecznie do 0
             CurrentSpeed = CurrentSpeed - 0.02;
@@ -166,9 +170,9 @@ void Creature::adjustSpeed(bool w, bool s, bool a, bool d){
         ///A i D
         if(a != d)//lewo i prawo
             if(a)
-                CurrentSpeed = CurrentSpeed * angle(-1.9);
+                CurrentSpeed = CurrentSpeed * angle(-10.0);
             else
-                CurrentSpeed = CurrentSpeed * angle(1.9);
+                CurrentSpeed = CurrentSpeed * angle(10.0);
         //a jezeli zadne nie wcisniete lub oba wcisniete, to nie skrecaj, proste
 
         //CurrentSpeed.even();
@@ -180,6 +184,17 @@ void Creature::limitSpeed(){
 void Creature::addForce(vector2d f){
     Forces = Forces + f;
 }
+void Creature::assignSensorValues(
+                        float LF, float MF, float RF,
+                        float LH, float MH, float RH,
+                        float LO, float MO, float RO
+                        ){
+    Sensors.assignValues(
+                        LF, MF, RF,
+                        LH, MH, RH,
+                        LO, MO, RO
+                         );
+}
 void Creature::setSpeedAsForces(){
     if(Forces.length() != 0)
     CurrentSpeed = Forces * (CurrentSpeed.length() / Forces.length());
@@ -188,6 +203,98 @@ void Creature::updateDirection(){
     if(CurrentSpeed.length() != 0)
         Direction = CurrentSpeed / CurrentSpeed.length();
 }
+void Creature::calculateMovement(){//based on sensors, decide on the next steps for the creature
+    /*//dzialajaca calosc:
+     W = (bool)random(9);
+     S = !((bool)random(4));
+     A = !((bool)random(3));
+     D = !((bool)random(3));*/
+
+     float aux = random(25);
+     float FoodSensorSum = Sensors.LeftFoodMarkerSensor + Sensors.MiddleFoodMarkerSensor + Sensors.RightFoodMarkerSensor;
+     float HomeSensorSum = Sensors.LeftHomeMarkerSensor + Sensors.MiddleHomeMarkerSensor + Sensors.RightHomeMarkerSensor;
+
+     //if(key() == 213) printf("%f, %f\n", FoodSensorSum, HomeSensorSum);
+
+     if(Stance == 1){
+        if((aux == 0) || (FoodSensorSum == 0)){//if no food marker detected or else still 4% chance to do it: perform random movement
+            W = (bool)random(12);
+            S = !(bool)random(4);
+            A = !(bool)random(5);
+            D = !(bool)random(5);
+        }else{ //food is detected, 96% chance to do so
+            if((Sensors.MiddleFoodMarkerSensor > Sensors.RightFoodMarkerSensor) && (Sensors.MiddleFoodMarkerSensor > Sensors.LeftFoodMarkerSensor)){
+                W = true;
+                S = false;
+                A = false;
+                D = false;
+            }else //mid is not the biggest
+            if(Sensors.LeftFoodMarkerSensor == Sensors.RightFoodMarkerSensor){
+                W = (bool)random(5);
+                S = !(bool)random(3);
+                A = (bool)random(2);
+                D = !A;
+            }else{ // mid is not highest and A,D are different
+                W = (bool)random(3);
+                S = false;
+                A = false;
+                D = false;
+                if(Sensors.LeftFoodMarkerSensor > Sensors.RightFoodMarkerSensor)
+                    A = true;
+                else //if(Sensors.LeftFoodMarkerSensor < Sensors.RightFoodMarkerSensor)
+                    D = true;
+            }
+        }
+     }
+    else if(Stance == 2){//going back home
+        if((aux == 0) || (HomeSensorSum == 0)){//if no Home marker detected or else still 4% chance to do it: perform random movement
+            W = (bool)random(12);
+            S = !(bool)random(4);
+            A = !(bool)random(5);
+            D = !(bool)random(5);
+        }else{ //Home is detected, 96% chance to do so
+            if((Sensors.MiddleHomeMarkerSensor > Sensors.RightHomeMarkerSensor) && (Sensors.MiddleHomeMarkerSensor > Sensors.LeftHomeMarkerSensor)){
+                W = true;
+                S = false;
+                A = false;
+                D = false;
+            }else //mid is not the biggest
+            if(Sensors.LeftHomeMarkerSensor == Sensors.RightHomeMarkerSensor){
+                W = (bool)random(5);
+                S = !(bool)random(3);
+                A = (bool)random(2);
+                D = !A;
+            }else{ // mid is not highest and A,D are different
+                W = (bool)random(3);
+                S = false;
+                A = false;
+                D = false;
+                if(Sensors.LeftHomeMarkerSensor > Sensors.RightHomeMarkerSensor)
+                    A = true;
+                else //if(Sensors.LeftHomeMarkerSensor < Sensors.RightHomeMarkerSensor)
+                    D = true;
+            }
+        }
+    }
+
+
+}
+bool Creature::w(){
+    return W;
+}
+bool Creature::s(){
+    return S;
+}
+bool Creature::a(){
+    return A;
+}
+bool Creature::d(){
+    return D;
+}
+void Creature::setStance(int s){
+    Stance = s;
+}
+
 
 ///Obstacle
 vector2d Obstacle::coordinates2(){
@@ -209,4 +316,20 @@ void Obstacle::fixEnds(){
         Coordinates = Coordinates2;
         Coordinates2 = temp;
     }
+}
+
+///Resource
+int Resource::size(){
+    return Size;
+}
+void Resource::setSize(int s){
+    Size = s;
+}
+void Resource::decrease(){
+    if(Size > 0)
+        Size--;
+}
+void Resource::resetResource(float x, float y, int S){
+    Coordinates.setValue(x, y);
+    Size = S;
 }
